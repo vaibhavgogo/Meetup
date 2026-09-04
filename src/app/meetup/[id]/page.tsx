@@ -1,7 +1,20 @@
 'use client'
 
+import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useParams } from 'next/navigation'
+import { MeetupMap } from '@/components/MeetupMap'
+
+type Participant = {
+  id: string
+  latitude: number
+  longitude: number
+}
+
+type Centroid = {
+  lat: number
+  lng: number
+}
 
 function getMyLocation() {
   return new Promise<{ lat: number; lng: number }>((resolve, reject) => {
@@ -20,15 +33,53 @@ export default function MeetupPage() {
   const params = useParams()
   const meetupId = params.id as string
 
-  const handleLocation = async () => {
-    try {
-      // 1. Get current location
-      const location = await getMyLocation()
+  const [participants, setParticipants] = useState<Participant[]>([])
+  const [centroid, setCentroid] = useState<Centroid | undefined>()
 
-      // 2. Create Supabase client
+  useEffect(() => {
+    const loadMeetup = async () => {
       const supabase = createClient()
 
-      // 3. Get logged-in user
+      // Fetch participants
+      const { data, error } = await supabase
+        .from('participants')
+        .select('id, latitude, longitude')
+        .eq('meetup_id', meetupId)
+        .not('latitude', 'is', null)
+        .not('longitude', 'is', null)
+
+      if (error) {
+        console.error('Error fetching participants:', error)
+        return
+      }
+
+      setParticipants(data || [])
+
+      // Fetch centroid
+      const centRes = await fetch(
+        `/api/meetup/${meetupId}/centroid`
+      )
+
+      const centroidData = centRes.ok
+  ? await centRes.json()
+  : null
+
+
+
+setCentroid(centroidData)
+    }
+
+    loadMeetup()
+  }, [meetupId])
+
+  const handleLocation = async () => {
+    try {
+      // Get current location
+      const location = await getMyLocation()
+
+      const supabase = createClient()
+
+      // Get logged-in user
       const {
         data: { user },
       } = await supabase.auth.getUser()
@@ -38,7 +89,7 @@ export default function MeetupPage() {
         return
       }
 
-      // 4. Save location
+      // Save location
       const { error } = await supabase
         .from('participants')
         .upsert(
@@ -60,18 +111,31 @@ export default function MeetupPage() {
 
       console.log('Location saved successfully!')
       console.log(location)
+
+      // Reload the data
+      window.location.reload()
     } catch (error) {
       console.error('Location error:', error)
     }
   }
 
   return (
-    <main>
-      <h1>Meetup</h1>
+    <main className="p-8">
+      <h1 className="text-3xl font-bold mb-6">
+        Meetup
+      </h1>
 
-      <button onClick={handleLocation}>
+      <button
+        onClick={handleLocation}
+        className="bg-blue-500 text-white px-4 py-2 rounded mb-6"
+      >
         Share My Location
       </button>
+
+      <MeetupMap
+        participants={participants}
+        centroid={centroid}
+      />
     </main>
   )
 }
