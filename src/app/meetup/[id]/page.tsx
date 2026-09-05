@@ -110,14 +110,19 @@ console.log('SESSION USER:', session?.user?.id)
 console.log('User ID:', user.id)
 console.log('Meetup ID:', meetupId)
 console.log('Location:', location)
-   const { error } = await supabase
+   const { error } =await supabase
   .from('participants')
-  .insert({
-    meetup_id: meetupId,
-    user_id: user.id,
-    latitude: location.lat,
-    longitude: location.lng,
-  })
+  .upsert(
+    {
+      meetup_id: meetupId,
+      user_id: user.id,
+      latitude: location.lat,
+      longitude: location.lng,
+    },
+    {
+      onConflict: 'meetup_id,user_id',
+    }
+  )
 
 if (error) {
   console.log('INSERT ERROR')
