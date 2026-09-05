@@ -35,11 +35,24 @@ export default function MeetupPage() {
 
   const [participants, setParticipants] = useState<Participant[]>([])
   const [centroid, setCentroid] = useState<Centroid | undefined>()
+  const [inviteToken, setInviteToken] = useState<string>('')
 
   useEffect(() => {
     const loadMeetup = async () => {
       const supabase = createClient()
+      
+const { data: meetup, error: meetupError } = await supabase
+  .from('meetups')
+  .select('invite_token')
+  .eq('id', meetupId)
+  .single()
 
+if (meetupError) {
+  console.error('Error fetching meetup:', meetupError)
+  return
+}
+
+setInviteToken(meetup.invite_token || '')
       // Fetch participants
       const { data, error } = await supabase
         .from('participants')
@@ -88,26 +101,31 @@ setCentroid(centroidData)
         console.log('User is not logged in')
         return
       }
+      const {
+  data: { session },
+} = await supabase.auth.getSession()
 
-      // Save location
-      const { error } = await supabase
-        .from('participants')
-        .upsert(
-          {
-            meetup_id: meetupId,
-            user_id: user.id,
-            latitude: location.lat,
-            longitude: location.lng,
-          },
-          {
-            onConflict: 'meetup_id,user_id',
-          }
-        )
+console.log('SESSION USER:', session?.user?.id)
 
-      if (error) {
-        console.error('Error saving location:', error)
-        return
-      }
+console.log('User ID:', user.id)
+console.log('Meetup ID:', meetupId)
+console.log('Location:', location)
+   const { error } = await supabase
+  .from('participants')
+  .insert({
+    meetup_id: meetupId,
+    user_id: user.id,
+    latitude: location.lat,
+    longitude: location.lng,
+  })
+
+if (error) {
+  console.log('INSERT ERROR')
+  console.log(JSON.stringify(error, null, 2))
+  return
+}
+
+console.log('Location saved successfully!')
 
       console.log('Location saved successfully!')
       console.log(location)
@@ -115,27 +133,53 @@ setCentroid(centroidData)
       // Reload the data
       window.location.reload()
     } catch (error) {
-      console.error('Location error:', error)
-    }
+  
+  console.error('Location error:', error)
+}
   }
+  const inviteUrl = inviteToken
+  ? `${window.location.origin}/join/${inviteToken}`
+  : ''
+ return (
+  <main className="p-8">
+    <h1 className="text-3xl font-bold mb-6">
+      Meetup
+    </h1>
 
-  return (
-    <main className="p-8">
-      <h1 className="text-3xl font-bold mb-6">
-        Meetup
-      </h1>
+    {inviteUrl && (
+      <div className="mb-6">
+        <h2 className="text-lg font-semibold mb-2">
+          Invite Friends
+        </h2>
 
-      <button
-        onClick={handleLocation}
-        className="bg-blue-500 text-white px-4 py-2 rounded mb-6"
-      >
-        Share My Location
-      </button>
+        <div className="flex items-center gap-2">
+          <input
+            value={inviteUrl}
+            readOnly
+            className="flex-1 border rounded-lg px-3 py-2 text-sm"
+          />
 
-      <MeetupMap
-        participants={participants}
-        centroid={centroid}
-      />
-    </main>
-  )
+          <button
+            onClick={() => navigator.clipboard.writeText(inviteUrl)}
+            className="bg-indigo-600 text-white px-4 py-2 rounded-lg"
+          >
+            Copy
+          </button>
+        </div>
+      </div>
+    )}
+
+    <button
+      onClick={handleLocation}
+      className="bg-blue-500 text-white px-4 py-2 rounded mb-6"
+    >
+      Share My Location
+    </button>
+
+    <MeetupMap
+      participants={participants}
+      centroid={centroid}
+    />
+  </main>
+)
 }

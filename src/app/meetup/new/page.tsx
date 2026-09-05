@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useRouter } from 'next/navigation'
-
+import { nanoid } from 'nanoid'
 export default function NewMeetupPage() {
   const [name, setName] = useState('')
   const [loading, setLoading] = useState(false)
@@ -36,6 +36,7 @@ export default function NewMeetupPage() {
       .insert({
         name: name,
         created_by: user.id,
+        invite_token: nanoid(10), 
       })
       .select()
       .single()
