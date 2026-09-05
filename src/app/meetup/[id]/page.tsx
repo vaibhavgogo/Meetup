@@ -110,19 +110,52 @@ console.log('SESSION USER:', session?.user?.id)
 console.log('User ID:', user.id)
 console.log('Meetup ID:', meetupId)
 console.log('Location:', location)
-   const { error } =await supabase
+  const { data: existingParticipant, error: findError } = await supabase
   .from('participants')
-  .upsert(
-    {
+  .select('id')
+  .eq('meetup_id', meetupId)
+  .eq('user_id', user.id)
+  .maybeSingle()
+
+if (findError) {
+  console.error('Error checking participant:', findError)
+  return
+}
+
+let error
+
+if (existingParticipant) {
+  // Update existing participant
+  const result = await supabase
+    .from('participants')
+    .update({
+      latitude: location.lat,
+      longitude: location.lng,
+    })
+    .eq('id', existingParticipant.id)
+
+  error = result.error
+} else {
+  // Insert new participant
+  const result = await supabase
+    .from('participants')
+    .insert({
       meetup_id: meetupId,
       user_id: user.id,
       latitude: location.lat,
       longitude: location.lng,
-    },
-    {
-      onConflict: 'meetup_id,user_id',
-    }
-  )
+    })
+
+  error = result.error
+}
+
+if (error) {
+  console.log('LOCATION ERROR')
+  console.log(JSON.stringify(error, null, 2))
+  return
+}
+
+console.log('Location saved successfully!')
 
 if (error) {
   console.log('INSERT ERROR')
