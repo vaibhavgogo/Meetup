@@ -25,3 +25,28 @@ export function fairnessScore(venue: LatLng, participants: LatLng[]): number {
   const maxDist = Math.max(...distances)
   return total + 2 * maxDist
 }
+// Average speeds in km/h per transport mode
+export const TRANSPORT_SPEEDS: Record<string, number> = {
+  walking: 5,
+  cycling: 15,
+  car: 40,
+  bus: 25,
+  metro: 35,
+}
+
+// Estimate travel time in minutes given distance (km) and mode
+export function estimateTravelMins(
+  distanceKm: number,
+  mode: string
+): number {
+  const speed = TRANSPORT_SPEEDS[mode] ?? 40
+  return Math.ceil((distanceKm / speed) * 60)
+}
+
+// Given arrival time and travel time, calculate departure time
+export function calcDepartAt(
+  arriveAt: Date,
+  travelMins: number
+): Date {
+  return new Date(arriveAt.getTime() - travelMins * 60 * 1000)
+}

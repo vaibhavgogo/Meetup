@@ -4,11 +4,14 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useParams } from 'next/navigation'
 import { MeetupMap } from '@/components/MeetupMap'
+import { TransportPicker } from '@/components/TransportPicker'
 
 type Participant = {
   id: string
+  user_id: string
   latitude: number
   longitude: number
+  transport_mode: string
 }
 
 type Centroid = {
@@ -35,12 +38,22 @@ export default function MeetupPage() {
 
   const [participants, setParticipants] = useState<Participant[]>([])
   const [centroid, setCentroid] = useState<Centroid | undefined>()
-  const [inviteToken, setInviteToken] = useState<string>('')
-
+const [userId, setUserId] = useState<string>('')
+const [inviteToken, setInviteToken] = useState<string>('')
+const [myTransport, setMyTransport] = useState<string>('car')
   useEffect(() => {
     const loadMeetup = async () => {
       const supabase = createClient()
-      
+      const {
+  data: { user },
+} = await supabase.auth.getUser()
+
+if (!user) {
+  console.log('User is not logged in')
+  return
+}
+
+setUserId(user.id)
 const { data: meetup, error: meetupError } = await supabase
   .from('meetups')
   .select('invite_token')
@@ -56,7 +69,7 @@ setInviteToken(meetup.invite_token || '')
       // Fetch participants
       const { data, error } = await supabase
         .from('participants')
-        .select('id, latitude, longitude')
+        .select('id, user_id, latitude, longitude, transport_mode')
         .eq('meetup_id', meetupId)
         .not('latitude', 'is', null)
         .not('longitude', 'is', null)
@@ -67,7 +80,11 @@ setInviteToken(meetup.invite_token || '')
       }
 
       setParticipants(data || [])
+const me = data?.find((p) => p.user_id === user.id)
 
+if (me) {
+  setMyTransport(me.transport_mode ?? 'car')
+}
       // Fetch centroid
       const centRes = await fetch(
         `/api/meetup/${meetupId}/centroid`
@@ -218,6 +235,16 @@ console.log('Location saved successfully!')
       participants={participants}
       centroid={centroid}
     />
+    {userId && (
+  <div className="mt-6">
+    <TransportPicker
+      meetupId={meetupId}
+      userId={userId}
+      current={myTransport}
+    />
+  </div>
+)}
   </main>
+  
 )
 }
