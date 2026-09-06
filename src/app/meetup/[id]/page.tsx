@@ -5,7 +5,8 @@ import { createClient } from '@/lib/supabase/client'
 import { useParams } from 'next/navigation'
 import { MeetupMap } from '@/components/MeetupMap'
 import { TransportPicker } from '@/components/TransportPicker'
-
+import { ArrivalTimePicker } from '@/components/ArrivalTimePicker'
+import { DepartureAlerts } from '@/components/DepartureAlerts'
 type Participant = {
   id: string
   user_id: string
@@ -41,6 +42,11 @@ export default function MeetupPage() {
 const [userId, setUserId] = useState<string>('')
 const [inviteToken, setInviteToken] = useState<string>('')
 const [myTransport, setMyTransport] = useState<string>('car')
+const [meetup, setMeetup] = useState<{
+  created_by: string
+  arrive_at: string | null
+} | null>(null)
+
   useEffect(() => {
     const loadMeetup = async () => {
       const supabase = createClient()
@@ -56,17 +62,26 @@ if (!user) {
 setUserId(user.id)
 const { data: meetup, error: meetupError } = await supabase
   .from('meetups')
-  .select('invite_token')
+  .select('invite_token, created_by, arrive_at')
   .eq('id', meetupId)
   .single()
 
 if (meetupError) {
-  console.error('Error fetching meetup:', meetupError)
+
+  console.error('MEETUP FETCH ERROR')
+  console.error('code:', meetupError.code)
+  console.error('message:', meetupError.message)
+  console.error('details:', meetupError.details)
+  console.error('hint:', meetupError.hint)
   return
+
 }
 
 setInviteToken(meetup.invite_token || '')
-      // Fetch participants
+      setMeetup({
+  created_by: meetup.created_by,
+  arrive_at: meetup.arrive_at,
+})
       const { data, error } = await supabase
         .from('participants')
         .select('id, user_id, latitude, longitude, transport_mode')
@@ -243,6 +258,17 @@ console.log('Location saved successfully!')
       current={myTransport}
     />
   </div>
+)}
+{userId && (
+  <div className="mt-6">
+    <DepartureAlerts meetupId={meetupId} />
+  </div>
+)}
+{meetup && meetup.created_by === userId && (
+  <ArrivalTimePicker
+    meetupId={meetupId}
+    current={meetup.arrive_at}
+  />
 )}
   </main>
   
