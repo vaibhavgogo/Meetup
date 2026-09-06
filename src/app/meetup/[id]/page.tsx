@@ -7,13 +7,8 @@ import { MeetupMap } from '@/components/MeetupMap'
 import { TransportPicker } from '@/components/TransportPicker'
 import { ArrivalTimePicker } from '@/components/ArrivalTimePicker'
 import { DepartureAlerts } from '@/components/DepartureAlerts'
-type Participant = {
-  id: string
-  user_id: string
-  latitude: number
-  longitude: number
-  transport_mode: string
-}
+import { useLiveParticipants } from '@/hooks/useLiveParticipants'
+import { LiveLocationShare } from '@/components/LiveLocationShare'
 
 type Centroid = {
   lat: number
@@ -36,13 +31,14 @@ function getMyLocation() {
 export default function MeetupPage() {
   const params = useParams()
   const meetupId = params.id as string
-
-  const [participants, setParticipants] = useState<Participant[]>([])
+const participants = useLiveParticipants(meetupId)
   const [centroid, setCentroid] = useState<Centroid | undefined>()
+  const [copied, setCopied] = useState(false)
 const [userId, setUserId] = useState<string>('')
 const [inviteToken, setInviteToken] = useState<string>('')
 const [myTransport, setMyTransport] = useState<string>('car')
 const [meetup, setMeetup] = useState<{
+  name: string
   created_by: string
   arrive_at: string | null
 } | null>(null)
@@ -62,7 +58,7 @@ if (!user) {
 setUserId(user.id)
 const { data: meetup, error: meetupError } = await supabase
   .from('meetups')
-  .select('invite_token, created_by, arrive_at')
+ .select('name, invite_token, created_by, arrive_at')
   .eq('id', meetupId)
   .single()
 
@@ -79,23 +75,17 @@ if (meetupError) {
 
 setInviteToken(meetup.invite_token || '')
       setMeetup({
+  name: meetup.name,
   created_by: meetup.created_by,
   arrive_at: meetup.arrive_at,
 })
-      const { data, error } = await supabase
-        .from('participants')
-        .select('id, user_id, latitude, longitude, transport_mode')
-        .eq('meetup_id', meetupId)
-        .not('latitude', 'is', null)
-        .not('longitude', 'is', null)
-
-      if (error) {
-        console.error('Error fetching participants:', error)
-        return
-      }
-
-      setParticipants(data || [])
-const me = data?.find((p) => p.user_id === user.id)
+document.title = `${meetup.name} — MeetUp`
+    const { data: me } = await supabase
+  .from('participants')
+  .select('transport_mode')
+  .eq('meetup_id', meetupId)
+  .eq('user_id', user.id)
+  .maybeSingle()
 
 if (me) {
   setMyTransport(me.transport_mode ?? 'car')
@@ -207,6 +197,14 @@ console.log('Location saved successfully!')
   console.error('Location error:', error)
 }
   }
+  function copyLink() {
+  navigator.clipboard.writeText(inviteUrl)
+  setCopied(true)
+
+  setTimeout(() => {
+    setCopied(false)
+  }, 2000)
+}
   const inviteUrl = inviteToken
   ? `${window.location.origin}/join/${inviteToken}`
   : ''
@@ -229,33 +227,63 @@ console.log('Location saved successfully!')
             className="flex-1 border rounded-lg px-3 py-2 text-sm"
           />
 
-          <button
-            onClick={() => navigator.clipboard.writeText(inviteUrl)}
-            className="bg-indigo-600 text-white px-4 py-2 rounded-lg"
-          >
-            Copy
-          </button>
+      <button
+  onClick={copyLink}
+  className="bg-indigo-600 text-white px-4 py-2 rounded-lg"
+>
+  {copied ? '✓ Copied!' : 'Copy'}
+</button>
         </div>
       </div>
     )}
 
-    <button
-      onClick={handleLocation}
-      className="bg-blue-500 text-white px-4 py-2 rounded mb-6"
-    >
-      Share My Location
-    </button>
+   <button
+  onClick={handleLocation}
+  className="bg-blue-500 text-white px-4 py-2 rounded mb-6"
+>
+  Share My Location
+</button>
 
-    <MeetupMap
-      participants={participants}
-      centroid={centroid}
-    />
+<div className="flex items-center gap-2 text-sm text-gray-600 mb-3">
+  <span className="w-6 h-6 bg-blue-100 text-blue-700 rounded-full flex items-center justify-center text-xs font-bold">
+    {participants.length}
+  </span>
+
+  {participants.length === 1
+    ? '1 person'
+    : `${participants.length} people`}{' '}
+  on the map
+</div>
+{participants.length === 0 && (
+  <div className="text-center py-8 text-gray-400">
+    <p className="text-3xl mb-2">📍</p>
+    <p className="text-sm">
+      No one has dropped a pin yet.
+    </p>
+    <p className="text-xs mt-1">
+      Share the invite link to get started.
+    </p>
+  </div>
+)}
+<MeetupMap
+  participants={participants}
+  centroid={centroid}
+  userId={userId}
+/>
     {userId && (
   <div className="mt-6">
     <TransportPicker
       meetupId={meetupId}
       userId={userId}
       current={myTransport}
+    />
+  </div>
+)}
+{userId && (
+  <div className="mt-4">
+    <LiveLocationShare
+      meetupId={meetupId}
+      userId={userId}
     />
   </div>
 )}
